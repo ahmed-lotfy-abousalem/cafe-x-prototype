@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
+// Prototype: every screen is client-rendered from mock data in localStorage,
+// so Cache Components / partial prefetching are intentionally left off.
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {
