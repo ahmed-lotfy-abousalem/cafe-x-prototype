@@ -31,7 +31,32 @@ export type MenuItem = {
 
 export type Category = { id: string; name: L10n; icon: string; active: boolean };
 
-export type OrderStatus = "received" | "preparing" | "ready" | "served" | "cancelled";
+export type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "served" | "cancelled";
+
+/** Statuses of an order still in play, and those a guest may still ask to change. */
+export const ACTIVE_STATUSES: OrderStatus[] = ["pending", "accepted", "preparing", "ready"];
+export const REQUESTABLE_STATUSES: OrderStatus[] = ["pending", "accepted"];
+/** Abuse limit: requests a guest can send per order (one open at a time). */
+export const MAX_GUEST_REQUESTS = 3;
+
+/** A guest's request to change or cancel; guests never edit an order directly. */
+export type ChangeRequest = {
+  id: string;
+  kind: "change" | "cancel";
+  /** For a change: the lines the guest wants instead (quantities lowered or lines removed). */
+  lines?: OrderLine[];
+  note?: string;
+  status: "pending" | "approved" | "declined";
+  reason?: string;
+  /** Online-paid orders only: what staff decided for the money (no automatic refunds). */
+  resolution?: "refund" | "credit";
+  createdAt: number;
+  decidedAt?: number;
+  decidedBy?: string;
+};
+
+/** One line in the order's audit log: who did what, when. */
+export type OrderEvent = { at: number; who: string; text: string };
 export type OrderType = "dine_in" | "takeaway";
 export type PaymentMethod = "cash" | "card" | "wallet" | "online";
 
@@ -67,6 +92,8 @@ export type Order = {
   history: { status: OrderStatus; at: number }[];
   cancelReason?: string;
   addedRounds?: number;
+  requests?: ChangeRequest[];
+  events?: OrderEvent[];
 };
 
 export type Table = {

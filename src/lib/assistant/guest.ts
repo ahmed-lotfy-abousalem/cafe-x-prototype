@@ -2,7 +2,7 @@
 
 import { allergenLabel, money, statusLabel } from "@/lib/i18n";
 import { totals } from "@/lib/seed";
-import { useDevice, useVenue } from "@/lib/store";
+import { requestBlock, useDevice, useVenue } from "@/lib/store";
 import type { Allergen, Lang, MenuItem, Tag } from "@/lib/types";
 import * as act from "./actions";
 import { type BotReply, findCategories, findItems, has, norm, priceLimit, replyLang, say } from "./nlp";
@@ -124,12 +124,40 @@ function answer(raw: string, lang: Lang): BotReply {
   const placeIntent = has(t, "place order", "place my order", "place the order", "order now", "send my order", "send it", "send to kitchen", "confirm", "checkout", "check out", "that s all", "thats all", "that s it", "thats it", "go ahead", "finish", "done", "خلاص", "كده تمام", "تمام كده", "اكد", "ابعت الطلب", "ابعته", "اطلب دلوقتي", "اطلب الطلب", "اكمل الطلب");
   if (placeIntent && !mentioned.length) return orderConfirm(lang);
 
+  /* Change / cancel: guests send a request, staff decide (never a direct edit) */
+  if (has(t, "cancel", "change my order", "edit my order", "modify", "remove from my order", "الغي", "الغاء", "عدل", "تعديل", "غير طلبي", "شيل من الطلب")) {
+    const o = act.myActiveOrder();
+    if (!o) return { text: say(lang, "I can't see an order from this phone yet.", "مش لاقي طلب من الموبايل ده لسه.") };
+    const block = requestBlock(o);
+    const isCancel = has(t, "cancel", "الغي", "الغاء");
+    if (block === "kitchen_started")
+      return { text: say(lang, `The kitchen has already started order #${o.number}, so changes go through our team. Want me to call a waiter?`, `المطبخ بدأ في طلب #${o.number}، فالتعديل بيكون عن طريق الفريق. أنادي الويتر؟`), chips: [say(lang, "Call the waiter", "نادي الويتر")] };
+    if (block === "already_open") return { text: say(lang, "You already have a request waiting for our team. You'll see the answer on your order page.", "عندك طلب لسه مستني رد الفريق. هتلاقي الرد في صفحة طلبك."), cards: [{ kind: "order", orderId: o.id }] };
+    if (block === "limit_reached") return { text: say(lang, "You've reached the request limit for this order. Please ask our team.", "وصلت للحد الأقصى من الطلبات للطلب ده. كلّم الفريق من فضلك.") };
+    if (!isCancel)
+      return { text: say(lang, "Open your order and tap **Request a change**: pick what to remove or reduce, and our team will approve it.", "افتح طلبك ودوس **اطلب تعديل**: اختار تشيل أو تقلل إيه، والفريق هيوافق عليه."), cards: [{ kind: "order", orderId: o.id }] };
+    return {
+      text: say(lang, `I can send a cancel request for order #${o.number}. Our team approves it before anything changes.`, `أقدر أبعت طلب إلغاء لطلب #${o.number}. الفريق بيوافق عليه الأول.`),
+      cards: [{
+        kind: "confirm",
+        title: say(lang, `Request to cancel #${o.number}`, `طلب إلغاء #${o.number}`),
+        detail: say(lang, "Staff will approve or decline it.", "الفريق هيوافق أو يرفض."),
+        confirmLabel: say(lang, "Send request", "ابعت الطلب"),
+        cancelLabel: say(lang, "Keep my order", "خلّي طلبي"),
+        run: () => {
+          useVenue.getState().requestChange(o.id, { kind: "cancel", note: "Sent from the chat assistant" });
+          return { text: say(lang, "Request sent ✅ You'll see our team's answer here and on your order page.", "اتبعت الطلب ✅ هتشوف رد الفريق هنا وفي صفحة طلبك."), cards: [{ kind: "order", orderId: o.id }], lang };
+        },
+      }],
+    };
+  }
+
   /* Order status */
   if (has(t, "my order", "status", "how long", "ready", "eta", "where is", "wheres", "طلبي", "الطلب فين", "جاهز", "هيجي امتي", "لسه")) {
     const o = act.myActiveOrder();
     if (!o) return { text: say(lang, "I can't see an order from this phone yet. Want some recommendations to get started?", "مش لاقي طلب من الموبايل ده لسه. تحب أرشحلك حاجة؟"), chips: GUEST_CHIPS[lang].slice(0, 3) };
     const s = L(statusLabel[o.status]);
-    const eta = ["received", "preparing"].includes(o.status) ? say(lang, ` · about ${act.orderEta(o)} min`, ` · حوالي ${act.orderEta(o)} دقيقة`) : "";
+    const eta = ["pending", "accepted", "preparing"].includes(o.status) ? say(lang, ` · about ${act.orderEta(o)} min`, ` · حوالي ${act.orderEta(o)} دقيقة`) : "";
     return { text: say(lang, `Order #${o.number} is **${s}**${eta}.`, `طلب رقم #${o.number} حالته **${s}**${eta}.`), cards: [{ kind: "order", orderId: o.id }] };
   }
 

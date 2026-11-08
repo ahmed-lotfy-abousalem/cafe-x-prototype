@@ -14,7 +14,9 @@ import {
   seedTables,
   totals,
 } from "./seed";
+import { MAX_GUEST_REQUESTS, REQUESTABLE_STATUSES } from "./types";
 import type {
+  ChangeRequest,
   Category,
   Lang,
   LinkItem,
@@ -70,6 +72,13 @@ type VenueActions = {
   markPaid: (orderId: string, method: PaymentMethod) => void;
   toggleLineDone: (orderId: string, lineId: string) => void;
   updateOrderLines: (orderId: string, lines: OrderLine[], reason: string) => void;
+  /** Guest side. Returns why the request isn't allowed, or null once it's sent. */
+  requestChange: (orderId: string, r: { kind: ChangeRequest["kind"]; lines?: OrderLine[]; note?: string }) => RequestBlock | null;
+  decideRequest: (
+    orderId: string,
+    requestId: string,
+    d: { approve: boolean; by: string; reason?: string; resolution?: ChangeRequest["resolution"] },
+  ) => void;
   simulateOrder: () => void;
 
   setItemAvailable: (id: string, available: boolean) => void;
@@ -128,6 +137,29 @@ const move = <T extends { id: string }>(arr: T[], id: string, dir: -1 | 1) => {
 const upsert = <T extends { id: string }>(arr: T[], v: T) =>
   arr.some((x) => x.id === v.id) ? arr.map((x) => (x.id === v.id ? v : x)) : [...arr, v];
 
+export type RequestBlock = "not_found" | "kitchen_started" | "already_open" | "limit_reached";
+
+/** Why a guest can't send a change/cancel request right now (null = allowed). */
+export function requestBlock(o?: Order): RequestBlock | null {
+  if (!o) return "not_found";
+  if (!REQUESTABLE_STATUSES.includes(o.status)) return "kitchen_started";
+  const reqs = o.requests ?? [];
+  if (reqs.some((r) => r.status === "pending")) return "already_open";
+  if (reqs.length >= MAX_GUEST_REQUESTS) return "limit_reached";
+  return null;
+}
+
+/** "removed Tiramisu; Iced Spanish Latte 2 → 1" */
+export function lineDiff(before: OrderLine[], after: OrderLine[]) {
+  const parts: string[] = [];
+  before.forEach((b) => {
+    const a = after.find((x) => x.lineId === b.lineId);
+    if (!a) parts.push(`removed ${b.name.en}`);
+    else if (a.quantity !== b.quantity) parts.push(`${b.name.en} ${b.quantity} → ${a.quantity}`);
+  });
+  return parts.join("; ") || "no item changes";
+}
+
 export const useVenue = create<VenueData & VenueActions>()(
   persist(
     (set, get) => ({
@@ -146,12 +178,12 @@ export const useVenue = create<VenueData & VenueActions>()(
           notes: o.notes || undefined,
           items: o.lines,
           ...totals(o.lines, settings, o.type),
-          status: "received",
+          status: "pending",
           paymentStatus: o.paid ? "paid" : "unpaid",
           paymentMethod: o.paymentMethod,
           createdAt: now,
           updatedAt: now,
-          history: [{ status: "received", at: now }],
+          history: [{ status: "pending", at: now }],
         };
         set((s) => ({ orders: [order, ...s.orders], nextNumber: s.nextNumber + 1 }));
         return order;
@@ -167,10 +199,10 @@ export const useVenue = create<VenueData & VenueActions>()(
               ...o,
               items,
               ...totals(items, s.settings, o.type),
-              status: "received",
+              status: "pending",
               updatedAt: now,
               addedRounds: (o.addedRounds ?? 0) + 1,
-              history: [...o.history, { status: "received", at: now }],
+              history: [...o.history, { status: "pending", at: now }],
             };
           }),
         })),
@@ -202,7 +234,9 @@ export const useVenue = create<VenueData & VenueActions>()(
       markPaid: (orderId, method) =>
         set((s) => ({
           orders: s.orders.map((o) =>
-            o.id === orderId ? { ...o, paymentStatus: "paid", paymentMethod: method, updatedAt: Date.now() } : o,
+            o.id === orderId
+              ? { ...o, paymentStatus: "paid", paymentMethod: method, updatedAt: Date.now(), events: [...(o.events ?? []), { at: Date.now(), who: "Staff", text: `confirmed ${method} payment and closed the tab` }] }
+              : o,
           ),
         })),
 
@@ -222,6 +256,46 @@ export const useVenue = create<VenueData & VenueActions>()(
               ? { ...o, items: lines, ...totals(lines, s.settings, o.type), notes: [o.notes, `Edited: ${reason}`].filter(Boolean).join(" · "), updatedAt: Date.now() }
               : o,
           ),
+        })),
+
+      requestChange: (orderId, r) => {
+        const o = get().orders.find((x) => x.id === orderId);
+        const block = requestBlock(o);
+        if (block) return block;
+        const now = Date.now();
+        const req: ChangeRequest = { id: uid("req"), kind: r.kind, lines: r.lines, note: r.note?.trim() || undefined, status: "pending", createdAt: now };
+        const what = r.kind === "cancel" ? "asked to cancel the order" : `asked to change the order: ${lineDiff(o!.items, r.lines ?? [])}`;
+        set((s) => ({
+          orders: s.orders.map((x) =>
+            x.id === orderId
+              ? { ...x, updatedAt: now, requests: [...(x.requests ?? []), req], events: [...(x.events ?? []), { at: now, who: "Guest", text: what + (req.note ? ` (“${req.note}”)` : "") }] }
+              : x,
+          ),
+        }));
+        return null;
+      },
+
+      decideRequest: (orderId, requestId, d) =>
+        set((s) => ({
+          orders: s.orders.map((o) => {
+            if (o.id !== orderId) return o;
+            const req = o.requests?.find((r) => r.id === requestId);
+            if (!req || req.status !== "pending") return o;
+            const now = Date.now();
+            const decided: ChangeRequest = { ...req, status: d.approve ? "approved" : "declined", reason: d.reason, resolution: d.resolution, decidedAt: now, decidedBy: d.by };
+            const money = d.resolution ? ` · ${d.resolution} recorded` : "";
+            const text = d.approve
+              ? `approved the ${req.kind === "cancel" ? "cancellation" : "change"}${money}`
+              : `declined the ${req.kind} request${d.reason ? `: ${d.reason}` : ""}`;
+            let next: Order = { ...o, updatedAt: now, requests: o.requests!.map((r) => (r.id === requestId ? decided : r)), events: [...(o.events ?? []), { at: now, who: d.by, text }] };
+            if (d.approve && req.kind === "cancel") {
+              next = { ...next, status: "cancelled", cancelReason: "Cancelled at the guest's request", history: [...o.history, { status: "cancelled", at: now }] };
+            } else if (d.approve && req.lines) {
+              // An open tab: removed items simply come off the bill.
+              next = { ...next, items: req.lines, ...totals(req.lines, s.settings, o.type) };
+            }
+            return next;
+          }),
         })),
 
       simulateOrder: () => {
@@ -280,7 +354,9 @@ export const useVenue = create<VenueData & VenueActions>()(
     }),
     {
       name: "cafex-venue",
-      version: 1,
+      // v2: "received" became "pending" and "accepted" was added; older saves restart from the demo seed.
+      version: 2,
+      migrate: () => freshData() as unknown as VenueData & VenueActions,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
     },

@@ -153,10 +153,10 @@ export const busiestHour = () => HOURLY.reduce((a, b) => (b.v > a.v ? b : a));
 
 export function liveOps() {
   const { orders, requests } = venue();
-  const active = orders.filter((o) => ["received", "preparing", "ready"].includes(o.status));
+  const active = orders.filter((o) => ["pending", "accepted", "preparing", "ready"].includes(o.status));
   return {
     active: active.length,
-    waiting: orders.filter((o) => o.status === "received").length,
+    waiting: orders.filter((o) => o.status === "pending").length,
     unpaid: orders.filter((o) => o.paymentStatus === "unpaid" && o.status !== "cancelled").reduce((a, o) => a + o.total, 0),
     requests: requests.filter((r) => !r.resolved),
   };

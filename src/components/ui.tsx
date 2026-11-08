@@ -74,7 +74,8 @@ export function Badge({
 }
 
 export const STATUS_TONE: Record<OrderStatus, "blue" | "amber" | "green" | "neutral" | "red"> = {
-  received: "blue",
+  pending: "blue",
+  accepted: "blue",
   preparing: "amber",
   ready: "green",
   served: "neutral",

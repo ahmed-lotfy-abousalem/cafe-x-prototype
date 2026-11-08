@@ -2,7 +2,7 @@
 
 import { useShallow } from "zustand/react/shallow";
 import { useMemo, useState } from "react";
-import { BellRing, Check, ChefHat, ClipboardList, PackageX, PartyPopper, Receipt, Search, UtensilsCrossed } from "lucide-react";
+import { MessageSquareWarning, BellRing, Check, ChefHat, ClipboardList, PackageX, PartyPopper, Receipt, Search, UtensilsCrossed } from "lucide-react";
 import { useVenue } from "@/lib/store";
 import type { Order, OrderStatus } from "@/lib/types";
 import { ago, cn, minutesSince, useNow } from "@/lib/utils";
@@ -12,8 +12,8 @@ import OrderDetail from "@/components/staff/OrderDetail";
 import { StaffHeader, useNewOrderAlert, useRequireStaff } from "@/components/staff/StaffShell";
 
 const COLUMNS: { status: OrderStatus; title: string; icon: React.ElementType; accent: string }[] = [
-  { status: "received", title: "New", icon: ClipboardList, accent: "bg-sky-500" },
-  { status: "preparing", title: "Preparing", icon: ChefHat, accent: "bg-amber-500" },
+  { status: "pending", title: "New", icon: ClipboardList, accent: "bg-sky-500" },
+  { status: "preparing", title: "Accepted · Preparing", icon: ChefHat, accent: "bg-amber-500" },
   { status: "ready", title: "Ready", icon: PartyPopper, accent: "bg-sage" },
   { status: "served", title: "Completed", icon: Check, accent: "bg-ink-soft" },
 ];
@@ -47,13 +47,14 @@ export default function StaffBoard() {
     [orders, type, table, unpaidOnly, q],
   );
 
+  const withRequests = orders.flatMap((o) => (o.requests ?? []).filter((r) => r.status === "pending").map((r) => ({ o, r })));
   if (!user) return null;
 
   const col = (s: OrderStatus): Order[] => {
-    const list = filtered.filter((o) => o.status === s || (s === "served" && showCancelled && o.status === "cancelled"));
+    const list = filtered.filter((o) => o.status === s || (s === "preparing" && o.status === "accepted") || (s === "served" && showCancelled && o.status === "cancelled"));
     return s === "served" ? list.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12) : list.sort((a, b) => a.createdAt - b.createdAt);
   };
-  const active = orders.filter((o) => ["received", "preparing", "ready"].includes(o.status));
+  const active = orders.filter((o) => ["pending", "accepted", "preparing", "ready"].includes(o.status));
   const avgWait = active.length ? Math.round(active.reduce((a, o) => a + minutesSince(o.createdAt, now), 0) / active.length) : 0;
   const unpaidTotal = orders.filter((o) => o.paymentStatus === "unpaid" && o.status !== "cancelled").reduce((a, o) => a + o.total, 0);
 
@@ -71,6 +72,23 @@ export default function StaffBoard() {
               <span className="text-ink-soft">{r.kind === "waiter" ? "is calling a waiter" : "requested the bill"}</span>
               <span className="text-xs text-muted">· {ago(r.at, now)}</span>
               <button onClick={() => resolveRequest(r.id)} className="ms-1 rounded-full bg-ink px-3 py-1 text-xs font-bold text-cream">Done</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Guest change / cancel requests waiting for a decision */}
+      {withRequests.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 lg:px-6">
+          {withRequests.map(({ o, r }) => (
+            <div key={r.id} className="flex animate-pop items-center gap-2 rounded-full bg-white py-1 ps-3 pe-1 text-sm shadow-sm">
+              <MessageSquareWarning className="size-4 text-amber-600" />
+              <b>#{o.number}</b>
+              <span className="text-ink-soft">
+                {o.type === "dine_in" ? `Table ${o.tableLabel}` : o.customerName} asks to {r.kind === "cancel" ? "cancel" : "change items"}
+              </span>
+              <span className="text-xs text-muted">· {ago(r.createdAt, now)}</span>
+              <button onClick={() => setOpenId(o.id)} className="ms-1 rounded-full bg-ink px-3 py-1 text-xs font-bold text-cream">Review</button>
             </div>
           ))}
         </div>

@@ -10,7 +10,7 @@ import { Badge, Button, Card, Select, STATUS_TONE } from "@/components/ui";
 import { PageHeader } from "@/components/admin/PageHeader";
 import OrderDetail from "@/components/staff/OrderDetail";
 
-const STATUSES: (OrderStatus | "all")[] = ["all", "received", "preparing", "ready", "served", "cancelled"];
+const STATUSES: (OrderStatus | "all")[] = ["all", "pending", "accepted", "preparing", "ready", "served", "cancelled"];
 
 export default function OrdersPage() {
   const orders = useVenue((s) => s.orders);

@@ -16,7 +16,7 @@ export default function KitchenDisplay() {
   if (!user) return null;
 
   const queue = orders
-    .filter((o) => o.status === "received" || o.status === "preparing")
+    .filter((o) => ["pending", "accepted", "preparing"].includes(o.status))
     .sort((a, b) => a.createdAt - b.createdAt);
   const ready = orders.filter((o) => o.status === "ready");
 
@@ -47,8 +47,8 @@ export default function KitchenDisplay() {
                 </div>
                 <div className="flex items-center gap-2 px-4 pt-1 text-sm text-cream/70">
                   {o.type === "dine_in" ? <><UtensilsCrossed className="size-4" /> Table {o.tableLabel}</> : <><Store className="size-4" /> Takeaway · {o.customerName}</>}
-                  <span className={cn("ms-auto rounded-md px-2 py-0.5 text-xs font-bold uppercase", o.status === "received" ? "bg-sky-500/20 text-sky-300" : "bg-amber-400/20 text-amber-300")}>
-                    {o.status === "received" ? "New" : "Cooking"}
+                  <span className={cn("ms-auto rounded-md px-2 py-0.5 text-xs font-bold uppercase", o.status === "preparing" ? "bg-amber-400/20 text-amber-300" : "bg-sky-500/20 text-sky-300")}>
+                    {o.status === "pending" ? "New" : o.status === "accepted" ? "Accepted" : "Cooking"}
                   </span>
                 </div>
                 <ul className="mt-3 flex-1 divide-y divide-kds-line border-y border-kds-line">
@@ -67,12 +67,19 @@ export default function KitchenDisplay() {
                     </li>
                   ))}
                 </ul>
+                {o.requests?.some((r) => r.status === "pending") && (
+                  <p className="bg-red-500/15 px-4 py-2 text-sm font-bold text-red-300">⚠ Guest asked for a change: wait for front of house</p>
+                )}
                 {o.notes && (
                   <p className="flex gap-2 bg-amber-400/10 px-4 py-2 text-sm text-amber-200">
                     <MessageSquareText className="size-4 shrink-0" /> {o.notes}
                   </p>
                 )}
-                {o.status === "received" ? (
+                {o.status === "pending" ? (
+                  <button onClick={() => setStatus(o.id, "accepted")} className="flex items-center justify-center gap-2 bg-sky-600 py-4 text-lg font-bold hover:bg-sky-500">
+                    <Check className="size-5" /> Accept
+                  </button>
+                ) : o.status === "accepted" ? (
                   <button onClick={() => setStatus(o.id, "preparing")} className="flex items-center justify-center gap-2 bg-sky-600 py-4 text-lg font-bold hover:bg-sky-500">
                     <ChefHat className="size-5" /> Start
                   </button>

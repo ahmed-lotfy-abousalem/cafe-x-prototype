@@ -7,7 +7,8 @@ import { clock, cn, egp, minutesSince } from "@/lib/utils";
 import { Badge } from "@/components/ui";
 
 export const NEXT: Partial<Record<OrderStatus, { to: OrderStatus; label: string; icon: React.ElementType; cls: string }>> = {
-  received: { to: "preparing", label: "Accept & start", icon: ChefHat, cls: "bg-ink text-cream hover:bg-ink/90" },
+  pending: { to: "accepted", label: "Accept order", icon: Check, cls: "bg-ink text-cream hover:bg-ink/90" },
+  accepted: { to: "preparing", label: "Start preparing", icon: ChefHat, cls: "bg-brand text-white hover:bg-brand-600" },
   preparing: { to: "ready", label: "Mark ready", icon: Check, cls: "bg-sage text-white hover:brightness-110" },
   ready: { to: "served", label: "Served", icon: ArrowRight, cls: "bg-brand text-white hover:bg-brand-600" },
 };
@@ -18,6 +19,7 @@ export function OrderCard({ order, now, flash, onOpen }: { order: Order; now: nu
   const late = order.status !== "served" && order.status !== "cancelled" && age >= 20;
   const warn = !late && order.status !== "served" && order.status !== "cancelled" && age >= 10;
   const next = NEXT[order.status];
+  const openReq = order.requests?.find((r) => r.status === "pending");
   const count = order.items.reduce((a, l) => a + l.quantity, 0);
 
   return (
@@ -34,7 +36,8 @@ export function OrderCard({ order, now, flash, onOpen }: { order: Order; now: nu
             <div className="flex items-center gap-2">
               <span className="text-xl font-extrabold tabular-nums">#{order.number}</span>
               {flash && <Badge tone="brand" className="bg-brand text-white">NEW</Badge>}
-              {(order.addedRounds ?? 0) > 0 && order.status === "received" && <Badge tone="blue">+ Added items</Badge>}
+              {(order.addedRounds ?? 0) > 0 && order.status === "pending" && <Badge tone="blue">+ Added items</Badge>}
+              {openReq && <Badge tone="amber" className="animate-pulse">{openReq.kind === "cancel" ? "Cancel request" : "Change request"}</Badge>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {order.type === "dine_in" ? (

@@ -29,7 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const logout = useDevice((s) => s.logout);
   const venue = useVenue((s) => s.settings.venueName);
-  const live = useVenue((s) => s.orders.filter((o) => ["received", "preparing", "ready"].includes(o.status)).length);
+  const live = useVenue((s) => s.orders.filter((o) => ["pending", "accepted", "preparing", "ready"].includes(o.status)).length);
   const [mobileNav, setMobileNav] = useState(false);
   if (!user) return null;
 

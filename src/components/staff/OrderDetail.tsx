@@ -1,13 +1,81 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, Banknote, CreditCard, Pencil, Printer, Smartphone, Trash2 } from "lucide-react";
+import { Ban, Banknote, CheckCircle2, CreditCard, MessageSquareWarning, Pencil, Printer, Smartphone, Trash2, XCircle } from "lucide-react";
 import { statusLabel } from "@/lib/i18n";
-import { useVenue } from "@/lib/store";
-import type { Order, OrderLine, OrderStatus, PaymentMethod } from "@/lib/types";
+import { lineDiff, useVenue } from "@/lib/store";
+import { useStaffUser } from "./StaffShell";
+import type { ChangeRequest, Order, OrderLine, OrderStatus, PaymentMethod } from "@/lib/types";
 import { clock, cn, egp } from "@/lib/utils";
 import { Badge, Button, Modal, Select, STATUS_TONE, Stepper, Textarea } from "@/components/ui";
 import { NEXT } from "./OrderCard";
+
+const DECLINE_REASONS = ["The kitchen already started it", "Item is already made", "Please speak to our team"];
+
+/** Staff review of a guest's open change/cancel request. */
+function RequestPanel({ order }: { order: Order }) {
+  const user = useStaffUser();
+  const decide = useVenue((s) => s.decideRequest);
+  const req = order.requests?.find((r) => r.status === "pending");
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState(DECLINE_REASONS[0]);
+  const [resolution, setResolution] = useState<ChangeRequest["resolution"]>();
+  if (!req) return null;
+  const by = user ? `${user.name.split(" ")[0]} (${user.role})` : "Staff";
+  const paidOnline = order.paymentStatus === "paid" && order.paymentMethod === "online";
+  const removedValue = req.kind === "cancel" ? order.subtotal : order.subtotal - (req.lines ?? []).reduce((a, l) => a + l.unitPrice * l.quantity, 0);
+  return (
+    <div className="mt-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+      <p className="flex items-center gap-2 font-bold text-amber-900">
+        <MessageSquareWarning className="size-5" /> Guest asks to {req.kind === "cancel" ? "cancel this order" : "change this order"}
+        <span className="ms-auto text-xs font-normal text-amber-800">sent {clock(req.createdAt)}</span>
+      </p>
+      {req.kind === "change" && <p className="mt-2 text-sm text-amber-900">{lineDiff(order.items, req.lines ?? [])}</p>}
+      {req.note && <p className="mt-1 text-sm italic text-amber-900">“{req.note}”</p>}
+      <p className="mt-2 text-xs text-amber-800">
+        {paidOnline
+          ? `Paid online: choose refund or credit for ${egp(removedValue)} before approving. Nothing is refunded automatically.`
+          : order.paymentStatus === "paid"
+            ? `Already paid (${order.paymentMethod}): settle ${egp(removedValue)} with the guest at the counter.`
+            : "Tab still open: removed items simply come off the bill."}
+      </p>
+      {paidOnline && (
+        <div className="mt-2 flex gap-2">
+          {(["refund", "credit"] as const).map((r) => (
+            <button key={r} onClick={() => setResolution(r)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold capitalize", resolution === r ? "border-ink bg-ink text-cream" : "border-amber-300 bg-white")}>
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+      {declining ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {DECLINE_REASONS.map((r) => (
+              <button key={r} onClick={() => setReason(r)} className={cn("rounded-full border px-3 py-1 text-xs font-semibold", reason === r ? "border-red-600 bg-red-600 text-white" : "border-red-200 bg-white text-red-700")}>
+                {r}
+              </button>
+            ))}
+          </div>
+          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Short reason, shown to the guest" />
+          <div className="flex gap-2">
+            <Button variant="danger" size="sm" disabled={!reason.trim()} onClick={() => decide(order.id, req.id, { approve: false, by, reason: reason.trim() })}>Decline request</Button>
+            <Button variant="ghost" size="sm" onClick={() => setDeclining(false)}>Back</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" disabled={paidOnline && !resolution} onClick={() => decide(order.id, req.id, { approve: true, by, resolution })}>
+            <CheckCircle2 className="size-4" /> Approve
+          </Button>
+          <Button size="sm" variant="outline" className="text-red-600" onClick={() => setDeclining(true)}>
+            <XCircle className="size-4" /> Decline
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const REASONS = ["Customer request", "Item out of stock", "Duplicate order", "Kitchen error", "Customer left"];
 
@@ -50,6 +118,8 @@ function Body({ order, onClose }: { order: Order; onClose: () => void }) {
             <b>{live.customerName}</b> {live.customerPhone && <span className="text-muted">· {live.customerPhone}</span>}
           </p>
         )}
+
+        <RequestPanel order={live} />
 
         {mode === "edit" ? (
           <div className="mt-4 space-y-2">
@@ -120,12 +190,25 @@ function Body({ order, onClose }: { order: Order; onClose: () => void }) {
         <div className="mt-5">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Timeline</p>
           <ol className="space-y-2 border-s-2 border-line ps-4">
-            {live.history.map((h, i) => (
-              <li key={i} className="relative text-sm">
-                <span className="absolute -start-[23px] top-1.5 size-3 rounded-full border-2 border-white bg-brand" />
-                <b>{statusLabel[h.status].en}</b> <span className="text-muted">· {clock(h.at)}</span>
-              </li>
-            ))}
+            {/* Status changes and the audit log (requests, decisions, payment) in one time order. */}
+            {[
+              ...live.history.map((h) => ({ at: h.at, who: "", text: statusLabel[h.status].en })),
+              ...(live.events ?? []),
+            ]
+              .sort((a, b) => a.at - b.at)
+              .map((h, i) => (
+                <li key={i} className="relative text-sm">
+                  <span className={cn("absolute -start-[23px] top-1.5 size-3 rounded-full border-2 border-white", h.who ? "bg-sky-500" : "bg-brand")} />
+                  {h.who ? (
+                    <span>
+                      <b>{h.who}</b> {h.text}
+                    </span>
+                  ) : (
+                    <b>{h.text}</b>
+                  )}{" "}
+                  <span className="text-muted">· {clock(h.at)}</span>
+                </li>
+              ))}
           </ol>
         </div>
       </div>
@@ -140,7 +223,7 @@ function Body({ order, onClose }: { order: Order; onClose: () => void }) {
         )}
         {live.status !== "cancelled" && live.paymentStatus === "unpaid" && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Mark as paid</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">Confirm payment &amp; close tab</p>
             <div className="flex flex-wrap gap-2">
               {payBtn("cash", "Cash", Banknote)}
               {payBtn("card", "Card", CreditCard)}
@@ -158,7 +241,7 @@ function Body({ order, onClose }: { order: Order; onClose: () => void }) {
           )}
         </div>
         <Select value={live.status} onChange={(e) => v.setStatus(live.id, e.target.value as OrderStatus)} aria-label="Override status">
-          {(["received", "preparing", "ready", "served"] as OrderStatus[]).map((s) => <option key={s} value={s}>Set status: {statusLabel[s].en}</option>)}
+          {(["pending", "accepted", "preparing", "ready", "served"] as OrderStatus[]).map((s) => <option key={s} value={s}>Set status: {statusLabel[s].en}</option>)}
         </Select>
         <Button variant="ghost" className="w-full" onClick={onClose}>Close</Button>
       </div>

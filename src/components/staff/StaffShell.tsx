@@ -41,7 +41,11 @@ export function useNewOrderAlert() {
   const [fresh, setFresh] = useState<string[]>([]);
 
   useEffect(() => {
-    const ids = orders.filter((o) => o.status === "received").map((o) => `${o.id}:${o.addedRounds ?? 0}`);
+    // New orders, added rounds and new guest change/cancel requests all alert the floor.
+    const ids = [
+      ...orders.filter((o) => o.status === "pending").map((o) => `${o.id}:${o.addedRounds ?? 0}`),
+      ...orders.flatMap((o) => (o.requests ?? []).filter((r) => r.status === "pending").map((r) => `${o.id}:${r.id}`)),
+    ];
     if (seen.current === null) {
       seen.current = new Set(ids);
       return;

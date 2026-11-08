@@ -3,16 +3,18 @@
 import { Suspense, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, BellRing, Check, ChefHat, ClipboardCheck, PartyPopper, Plus, Receipt, Store, UtensilsCrossed, XCircle } from "lucide-react";
+import { ThumbsUp, ArrowLeft, BellRing, Check, ChefHat, ClipboardCheck, PartyPopper, Plus, Receipt, Store, UtensilsCrossed, XCircle } from "lucide-react";
 import { statusHint, statusLabel, useT } from "@/lib/i18n";
 import { useDevice, useVenue } from "@/lib/store";
 import type { OrderStatus } from "@/lib/types";
 import { clock, cn, useNow } from "@/lib/utils";
 import { Badge, Button, LangToggle, Logo, useToast } from "@/components/ui";
 import { GuestAssistant } from "@/components/chat/Assistants";
+import OrderRequests from "@/components/customer/OrderRequests";
 
 const FLOW: { s: OrderStatus; icon: React.ElementType }[] = [
-  { s: "received", icon: ClipboardCheck },
+  { s: "pending", icon: ClipboardCheck },
+  { s: "accepted", icon: ThumbsUp },
   { s: "preparing", icon: ChefHat },
   { s: "ready", icon: PartyPopper },
   { s: "served", icon: UtensilsCrossed },
@@ -99,7 +101,7 @@ function Track() {
           {cancelled ? <span className="inline-flex items-center gap-2"><XCircle className="size-6" /> {t("cancelled")}</span> : L(statusLabel[order.status])}
         </p>
         <p className="relative mt-1 text-sm text-cream/75">{L(statusHint[order.status])}</p>
-        {(order.status === "received" || order.status === "preparing") && (
+        {["pending", "accepted", "preparing"].includes(order.status) && (
           <p className="relative mt-4 inline-block rounded-full bg-brand px-4 py-1.5 text-sm font-bold text-white">
             {t("estReady")} ~{n(eta)} {t("min")}
           </p>
@@ -150,6 +152,8 @@ function Track() {
         <button onClick={() => help("waiter")} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white p-3 text-xs font-semibold shadow-card"><BellRing className="size-5 text-brand" /> {t("callWaiter")}</button>
         <button onClick={() => help("bill")} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white p-3 text-xs font-semibold shadow-card"><Receipt className="size-5 text-brand" /> {t("requestBill")}</button>
       </div>
+
+      <OrderRequests order={order} onCallWaiter={() => help("waiter")} />
 
       {/* Receipt */}
       <div className="mx-4 mt-4 rounded-3xl bg-white p-5 shadow-card">

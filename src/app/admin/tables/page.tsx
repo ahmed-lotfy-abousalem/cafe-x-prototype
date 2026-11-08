@@ -18,7 +18,7 @@ export default function TablesPage() {
   const [zone, setZone] = useState<string>("all");
   const [edit, setEdit] = useState<Table | null>(null);
   const list = v.tables.filter((t) => zone === "all" || t.zone === zone);
-  const busy = (label: string) => v.orders.some((o) => o.tableLabel === label && ["received", "preparing", "ready"].includes(o.status));
+  const busy = (label: string) => v.orders.some((o) => o.tableLabel === label && ["pending", "accepted", "preparing", "ready"].includes(o.status));
 
   const downloadPng = (id: string, name: string) => {
     const canvas = document.getElementById(`qr-${id}`) as HTMLCanvasElement | null;

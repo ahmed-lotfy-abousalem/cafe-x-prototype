@@ -84,7 +84,8 @@ const dict = {
 export type DictKey = keyof typeof dict;
 
 export const statusLabel: Record<OrderStatus, L10n> = {
-  received: { en: "Received", ar: "تم الاستلام" },
+  pending: { en: "Pending", ar: "قيد الانتظار" },
+  accepted: { en: "Accepted", ar: "تم القبول" },
   preparing: { en: "Preparing", ar: "قيد التحضير" },
   ready: { en: "Ready", ar: "جاهز" },
   served: { en: "Served", ar: "تم التقديم" },
@@ -92,7 +93,8 @@ export const statusLabel: Record<OrderStatus, L10n> = {
 };
 
 export const statusHint: Record<OrderStatus, L10n> = {
-  received: { en: "The team has your order and will start it shortly.", ar: "استلم الفريق طلبك وسيبدأ تحضيره قريبًا." },
+  pending: { en: "Waiting for the team to accept your order.", ar: "في انتظار قبول الفريق لطلبك." },
+  accepted: { en: "Accepted. The kitchen will start it shortly.", ar: "تم قبول طلبك، والمطبخ هيبدأ فيه حالًا." },
   preparing: { en: "Our baristas and chefs are on it.", ar: "فريق الباريستا والمطبخ يحضّر طلبك الآن." },
   ready: { en: "Your order is ready!", ar: "طلبك جاهز!" },
   served: { en: "Enjoy your meal ☕", ar: "بالهنا والشفا ☕" },

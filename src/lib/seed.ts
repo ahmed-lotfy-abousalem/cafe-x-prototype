@@ -580,8 +580,8 @@ export function seedOrders(now: number): Order[] {
     n: number; ago: number; status: OrderStatus; type: "dine_in" | "takeaway"; table?: string; name?: string;
     lines: [string, number, string[], string?][]; paid?: boolean; notes?: string;
   }[] = [
-    { n: 31, ago: 2, status: "received", type: "dine_in", table: "7", lines: [["iced_spanish", 2, ["size_m", "milk_oat"]], ["pancakes", 1, ["bf_berries"]]], notes: "Birthday table, candle on pancakes please 🎂" },
-    { n: 30, ago: 4, status: "received", type: "takeaway", name: "Sara", lines: [["cappuccino", 1, ["size_l", "milk_almond", "sw_less"]], ["croissant", 2, []]] },
+    { n: 31, ago: 2, status: "pending", type: "dine_in", table: "7", lines: [["iced_spanish", 2, ["size_m", "milk_oat"]], ["pancakes", 1, ["bf_berries"]]], notes: "Birthday table, candle on pancakes please 🎂" },
+    { n: 30, ago: 4, status: "accepted", type: "takeaway", name: "Sara", lines: [["cappuccino", 1, ["size_l", "milk_almond", "sw_less"]], ["croissant", 2, []]] },
     { n: 29, ago: 9, status: "preparing", type: "dine_in", table: "T2", lines: [["signature_burger", 2, ["d_mw", "s_fries", "b_bacon", "r_onion"]], ["mojito", 2, ["sw_less"]]] },
     { n: 28, ago: 13, status: "preparing", type: "dine_in", table: "3", lines: [["buddha", 1, ["pr_chicken"], "Dressing on the side"], ["orange", 1, ["j_lg", "sw_none"]]] },
     { n: 27, ago: 16, status: "ready", type: "takeaway", name: "Ahmed", lines: [["smash", 1, ["s_sweet", "b_jalapeno"]], ["peach_tea", 1, ["j_reg", "sw_norm"]]], paid: true },
@@ -596,7 +596,7 @@ export function seedOrders(now: number): Order[] {
     const lines = o.lines.map(([id, q, mods, notes]) => priceLine(byId(id), q, mods, notes ?? ""));
     const t = totals(lines, s, o.type);
     const createdAt = now - o.ago * min;
-    const flow: OrderStatus[] = ["received", "preparing", "ready", "served"];
+    const flow: OrderStatus[] = ["pending", "accepted", "preparing", "ready", "served"];
     const upto = o.status === "cancelled" ? 0 : flow.indexOf(o.status);
     const history = flow.slice(0, upto + 1).map((st, i) => ({ status: st, at: createdAt + i * Math.min(6, o.ago / 3) * min }));
     if (o.status === "cancelled") history.push({ status: "cancelled", at: createdAt + 3 * min });

@@ -103,10 +103,12 @@ export default function MenuAdmin() {
           {view === "list" ? (
             <div className="divide-y divide-line">
               {list.map((i) => (
-                <div key={i.id} className="flex items-center gap-4 px-4 py-3 hover:bg-sand/30">
-                  <ItemImage src={i.image} alt="" className={cn("size-14 rounded-xl", !i.available && "grayscale")} />
+                <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-sand/30 sm:flex-nowrap">
+                  <ItemImage src={i.image} alt="" className={cn("size-14 shrink-0 rounded-xl", !i.available && "grayscale")} />
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{i.name.en} <span className="font-normal text-muted" dir="rtl">· {i.name.ar}</span></p>
+                    <p className="font-semibold">
+                      {i.name.en} <span className="inline-block font-normal text-muted" dir="rtl">· {i.name.ar}</span>
+                    </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className="text-xs text-muted">{v.categories.find((c) => c.id === i.categoryId)?.name.en}</span>
                       {i.modifierGroups.length > 0 && <Badge>{i.modifierGroups.length} option groups</Badge>}
@@ -114,14 +116,17 @@ export default function MenuAdmin() {
                       {i.schedule !== "all_day" && <Badge tone="blue">{i.schedule === "breakfast" ? "Breakfast only" : "Evening only"}</Badge>}
                     </div>
                   </div>
-                  <span className="w-24 text-end font-bold tabular-nums">{egp(i.price)}</span>
-                  <div className="flex w-28 items-center justify-end gap-2">
-                    <span className={cn("text-xs font-semibold", i.available ? "text-sage" : "text-red-600")}>{i.available ? "Available" : "Sold out"}</span>
-                    <Toggle size="sm" checked={i.available} onChange={(x) => v.setItemAvailable(i.id, x)} />
-                  </div>
-                  <div className="flex">
-                    <button onClick={() => setEditing(i)} className="grid size-9 place-items-center rounded-lg hover:bg-sand" title="Edit"><Pencil className="size-4" /></button>
-                    <button onClick={() => { v.upsertItem({ ...i, id: uid("itm"), name: { en: `${i.name.en} (copy)`, ar: i.name.ar } }); toast.show("Item duplicated"); }} className="grid size-9 place-items-center rounded-lg hover:bg-sand" title="Duplicate"><Copy className="size-4" /></button>
+                  {/* Phones: price, status and actions take their own line under the name. */}
+                  <div className="flex w-full items-center gap-3 ps-[4.5rem] sm:w-auto sm:gap-4 sm:ps-0">
+                    <span className="font-bold whitespace-nowrap tabular-nums sm:w-24 sm:text-end">{egp(i.price)}</span>
+                    <div className="flex items-center gap-2 sm:w-28 sm:justify-end">
+                      <span className={cn("text-xs font-semibold whitespace-nowrap", i.available ? "text-sage" : "text-red-600")}>{i.available ? "Available" : "Sold out"}</span>
+                      <Toggle size="sm" checked={i.available} onChange={(x) => v.setItemAvailable(i.id, x)} />
+                    </div>
+                    <div className="ms-auto flex sm:ms-0">
+                      <button onClick={() => setEditing(i)} className="grid size-9 place-items-center rounded-lg hover:bg-sand" title="Edit"><Pencil className="size-4" /></button>
+                      <button onClick={() => { v.upsertItem({ ...i, id: uid("itm"), name: { en: `${i.name.en} (copy)`, ar: i.name.ar } }); toast.show("Item duplicated"); }} className="grid size-9 place-items-center rounded-lg hover:bg-sand" title="Duplicate"><Copy className="size-4" /></button>
+                    </div>
                   </div>
                 </div>
               ))}
